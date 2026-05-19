@@ -26,6 +26,7 @@ class Dl:
 		template_file: str,
 		exclude_tags: str | None,
 		truncate: int,
+		encode_mp3: bool = False,
 		dump_json: bool = False,
 		use_playlist_name: bool = False,
 		**kwargs,
@@ -44,6 +45,7 @@ class Dl:
 		self.template_file = template_file
 		self.exclude_tags = [i.lower() for i in exclude_tags.split(",")] if exclude_tags is not None else []
 		self.truncate = None if truncate is not None and truncate < 4 else truncate
+		self.encode_mp3 = encode_mp3
 
 		self.dump_json = dump_json
 		self.tags: Tags | None = None 
@@ -175,9 +177,14 @@ class Dl:
 		return self.temp_path / f"{song_id}.m4a"
 
 	def get_fixed_location(self, song_id):
-		if self.soundcloud:
+		if self.soundcloud or self.encode_mp3:
 			return self.temp_path / f"{song_id}_fixed.mp3"
 		return self.temp_path / f"{song_id}_fixed.m4a"
+
+	def get_output_extension(self):
+		if self.soundcloud or self.encode_mp3:
+			return ".mp3"
+		return ".m4a"
 
 	def get_final_location(self, tags, extension = ".m4a", is_single = False, single_folders = False):
 		final_location_folder = self.template_folder.split("/")
@@ -245,6 +252,9 @@ class Dl:
 
 	def fixup(self, temp_location, fixed_location):
 		fixup = [self.ffmpeg_location, "-loglevel", "error", "-i", temp_location]
+		if self.encode_mp3 and not self.soundcloud:
+			subprocess.run([*fixup, "-vn", "-c:a", "libmp3lame", "-b:a", "320k", fixed_location], check=True)
+			return
 		codec = self.get_audio_codec(temp_location)
 		if codec == "opus":
 			fixup.extend(["-f", "mp4"])
